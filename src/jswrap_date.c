@@ -135,7 +135,7 @@ int jsdGetEffectiveTimeZone(JsVarFloat ms, bool is_local_time, bool *is_dst) {
     jsvUnLock(dst);
   }
 #endif
-  if (is_dst) *is_dst = false;
+  if (is_dst) *is_dst = jsvGetBoolAndUnLock(jsvObjectGetChildIfExists(execInfo.hiddenRoot, JS_ISDST_VAR));
   return jsvGetIntegerAndUnLock(jsvObjectGetChildIfExists(execInfo.hiddenRoot, JS_TIMEZONE_VAR));
 }
 
