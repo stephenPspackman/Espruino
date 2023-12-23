@@ -2115,6 +2115,7 @@ void jswrap_espruino_setDST(JsVar *params) {
   }
   // remove timezone var
   jsvObjectRemoveChild(execInfo.hiddenRoot, JS_TIMEZONE_VAR);
+  jsvObjectRemoveChild(execInfo.hiddenRoot, JS_ISDST_VAR);
   // write DST var
   JsVar *dst = jswrap_typedarray_constructor(ARRAYBUFFERVIEW_INT16, params, 0, 0);
   jsvObjectSetChildAndUnLock(execInfo.hiddenRoot, JS_DST_SETTINGS_VAR, dst);
