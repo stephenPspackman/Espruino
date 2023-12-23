@@ -2022,6 +2022,7 @@ Time can be set with `setTime`.
 calling `E.setTimeZone()` will remove them and move back to using a static
 timezone that doesn't change based on the time of year.
 
+**Note:** The dst parameter is ignored in ESPR_NO_DAYLIGHT_SAVING
 */
 void jswrap_espruino_setTimeZone(JsVarFloat zone, bool isDST) {
 #ifndef ESPR_NO_DAYLIGHT_SAVING
