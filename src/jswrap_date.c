@@ -74,11 +74,17 @@ JsVarFloat getDstChangeTime(int y, int dow_number, int dow, int month, int day_o
     }
   }
   ans = getDayNumberFromDate(y, month, 1); // ans % 7 is 0 for THU; (ans + 4) % 7 is 0 for SUN
-  // ((14 - ((ans + 4) % 7) + dow) % 7) is zero if 1st is our dow, 1 if 1st is the day before our dow etc
-  if (dow_number == 4) {
-    ans += ((14 - ((ans + 4) % 7) + dow) % 7) - 7;
+  if (dow < 0) { // no particular day of week, so index off absolute month ends
+    if (dow_number == 4) {
+      ans -= 1;
+    }
   } else {
-    ans += 7 * dow_number + (14 - ((ans + 4) % 7) + dow) % 7;
+    // ((14 - ((ans + 4) % 7) + dow) % 7) is zero if 1st is our dow, 1 if 1st is the day before our dow etc
+    if (dow_number == 4) {
+      ans += ((14 - ((ans + 4) % 7) + dow) % 7) - 7;
+    } else {
+      ans += 7 * dow_number + (14 - ((ans + 4) % 7) + dow) % 7;
+    }
   }
   ans = (ans + day_offset) * 1440 + timeOfDay;
   if (!as_local_time) {
