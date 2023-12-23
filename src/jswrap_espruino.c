@@ -2009,6 +2009,7 @@ void jswrap_espruino_lockConsole() {
   "generate" : "jswrap_espruino_setTimeZone",
   "params" : [
     ["zone","float","The time zone in hours"]
+    ["dst","bool","(Optional) A boolean; if true, local times will report as DST."]
   ]
 }
 Set the time zone to be used with `Date` objects.
@@ -2022,13 +2023,15 @@ calling `E.setTimeZone()` will remove them and move back to using a static
 timezone that doesn't change based on the time of year.
 
 */
-void jswrap_espruino_setTimeZone(JsVarFloat zone) {
+void jswrap_espruino_setTimeZone(JsVarFloat zone, bool isDST) {
 #ifndef ESPR_NO_DAYLIGHT_SAVING
   jswrap_espruino_setDST(0); // disable DST
 #endif
   // update the timezone var
   jsvObjectSetChildAndUnLock(execInfo.hiddenRoot, JS_TIMEZONE_VAR,
       jsvNewFromInteger((int)(zone*60)));
+  jsvObjectSetChildAndUnLock(execInfo.hiddenRoot, JS_ISDST_VAR,
+      jsvNewFromBoolean(isDST));
 }
 
 #ifndef ESPR_NO_DAYLIGHT_SAVING
@@ -2053,7 +2056,7 @@ The parameters are
 - startDowNumber: The index of the day-of-week in the month when DST starts - 0
   for first, 1 for second, 2 for third, 3 for fourth and 4 for last
 - startDow: The day-of-week for the DST start calculation - 0 for Sunday, 6 for
-  Saturday
+  Saturday. Use -1 if there is no day-of-week constraint
 - startMonth: The number of the month that DST starts - 0 for January, 11 for
   December
 - startDayOffset: The number of days between the selected day-of-week and the
