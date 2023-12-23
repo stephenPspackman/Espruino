@@ -2026,12 +2026,12 @@ timezone that doesn't change based on the time of year.
 void jswrap_espruino_setTimeZone(JsVarFloat zone, bool isDST) {
 #ifndef ESPR_NO_DAYLIGHT_SAVING
   jswrap_espruino_setDST(0); // disable DST
+  jsvObjectSetChildAndUnLock(execInfo.hiddenRoot, JS_ISDST_VAR,
+      jsvNewFromBoolean(isDST));
 #endif
   // update the timezone var
   jsvObjectSetChildAndUnLock(execInfo.hiddenRoot, JS_TIMEZONE_VAR,
       jsvNewFromInteger((int)(zone*60)));
-  jsvObjectSetChildAndUnLock(execInfo.hiddenRoot, JS_ISDST_VAR,
-      jsvNewFromBoolean(isDST));
 }
 
 #ifndef ESPR_NO_DAYLIGHT_SAVING
