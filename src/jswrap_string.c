@@ -674,15 +674,16 @@ JsVar *jswrap_string_removeAccents(JsVar *parent) {
         case 0xDD: // Ý
           ch = 'Y';
           break;
-        case 0xDE: // Þ
-          ch = 'P';
+        case 0xDE: // convert Þ to TH
+          jsvStringIteratorAppend(&itdst, isLowerCase ? 't' : 'T');
+          ch = 'H';
           break;
-        case 0xDF: // ß to SS or ÿ to y (if lowercase)
+        case 0xDF: // ß to ss or ÿ to y (if lowercase)
           if (isLowerCase) {
             ch = 'Y';
           } else {
-            jsvStringIteratorAppend(&itdst, 'S');
-            ch = 'S';
+            jsvStringIteratorAppend(&itdst, 's');
+            ch = 's';
           }
           break;
       }
