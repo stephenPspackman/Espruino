@@ -658,8 +658,9 @@ JsVar *jswrap_string_removeAccents(JsVar *parent) {
         case 0xCC ... 0xCF: // Ì Í Î Ï
           ch = 'I';
           break;
-        case 0xD0: // Ð
-          ch = 'D';
+        case 0xD0: // convert Ð to DH
+          jsvStringIteratorAppend(&itdst, isLowerCase ? 'd' : 'D');
+          ch = 'H';
           break;
         case 0xD1: // Ñ
           ch = 'N';
