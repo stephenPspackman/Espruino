@@ -8,7 +8,7 @@
 DWORD get_fattime (void)
 {
   JsVarFloat time = jswrap_date_now();
-  TimeInDay tid = getTimeFromMilliSeconds(time, false);
+  TimeInDay tid = getTimeFromMilliSeconds(time, 0);
   CalendarDate date = getCalendarDate(tid.daysSinceEpoch);
 
 	DWORD res;

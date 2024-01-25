@@ -1655,7 +1655,7 @@ void peripheralPollHandler() {
     bangleTasks |= JSBT_HEALTH;
     jshHadEvent();
     // What if we've changed day?
-    TimeInDay td = getTimeFromMilliSeconds(msecs, false/*forceGMT*/);
+    TimeInDay td = getTimeFromMilliSeconds(msecs, 0/*GMT*/);
     uint8_t dayIndex = (uint8_t)td.daysSinceEpoch;
     if (dayIndex != healthDaily.index) {
       bangleTasks |= JSBT_MIDNIGHT;

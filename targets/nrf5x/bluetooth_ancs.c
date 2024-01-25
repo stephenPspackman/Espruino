@@ -295,7 +295,7 @@ void ble_cts_handle_time(BLEPending blep, char *buffer, size_t bufferLen) {
   td.sec = time.seconds;
   td.ms = (((int)p_time->exact_time_256.fractions256) * 1000) >> 8;
   td.zone = 0; // assume no timezone?
-  jsvObjectSetChildAndUnLock(o, "date", jswrap_date_from_milliseconds(fromTimeInDay(&td)));
+  jsvObjectSetChildAndUnLock(o, "date", jswrap_date_from_milliseconds(fromTimeInDay(&td, 0)));
   if (bufferLen==12) {
     local_time_char_t *p_lt = (local_time_char_t*)&buffer[10];
     jsvObjectSetChildAndUnLock(o, "timezone", jsvNewFromFloat(p_lt->timezone / 4.0));

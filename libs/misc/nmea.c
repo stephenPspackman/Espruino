@@ -190,7 +190,7 @@ JsVar *nmea_to_jsVar(NMEAFixInfo *gpsFix) {
       td.sec = gpsFix->sec;
       td.ms = gpsFix->ms;
       td.zone = 0; // jsdGetTimeZone(); - no! GPS time is always in UTC :)
-      jsvObjectSetChildAndUnLock(o, "time", jswrap_date_from_milliseconds(fromTimeInDay(&td)));
+      jsvObjectSetChildAndUnLock(o, "time", jswrap_date_from_milliseconds(fromTimeInDay(&td, 0)));
     } else {
       jsvObjectSetChildAndUnLock(o, "time", 0);
     }

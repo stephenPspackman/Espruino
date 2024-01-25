@@ -2002,33 +2002,110 @@ void jswrap_espruino_lockConsole() {
   jsvUnLock(pwd);
 }
 
+#ifndef ESPR_NO_DAYLIGHT_SAVING
+// Args: [0]weekNumber, [1]dayOfWeek, [2]month, [3]dayOffset, [4]minute
+// If p[0] is 4, this indicates the last instance, not the nth instance, in the month
+// If p[1] is -1, the day of week is unconstrained
+static JsVarInt encode_dst_trigger(JsVarInt p[5], int index) {
+  static char const ml[12] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+  return 0x80000000
+      | p[2] + (p[2] > (p[0] != 4)) << 0x17
+      | (p[0] == 4 ? ml[p[2]] - (p[1] < 0 ? 0 : 6) : 7 * p[0] + p[3] + 1) << 0x12
+      | (p[1] < 0 ? 0 : (p[1] + 6) % 7 + 1) << 0x0f
+      | p[4] << 0x04
+      | index;
+}
+
+static JsVarInt encode_offset(JsVarInt offs, bool dst, JsVarInt pos, JsVarInt len) {
+  return 0xC0000000 | offs << 0x11 & 0x0FFE0000 | !!dst << 0x10 | pos << 6 | len;
+}
+#endif
+
 /*JSON{
   "type" : "staticmethod",
   "class" : "E",
   "name" : "setTimeZone",
   "generate" : "jswrap_espruino_setTimeZone",
   "params" : [
-    ["zone","float","The time zone in hours"]
+    ["zone","JsVar","The time zone in hours; or a structured description as below"],
+    ["isDST","bool","[optional] Whether daylight saving is in effect"],
+    ["label","JsVar","[optional] A short user-facing label for the effective time zone, e.g. PDT"],
+    ["timeZoneID","JsVar","[optional] Standard time zone identifier, e.g. America/Los_Angeles"]
+  ],
+  "typescript" : [
+    "setTimeZone(zone: number, isDST?: false, label?: string, timeZoneID?: string): void;",
+    "setTimeZone(zone: {i?: string, d: number[], l?: string, ll?: string}): void;"
   ]
 }
-Set the time zone to be used with `Date` objects.
+Set the default time zone to be used with `Date` objects.
 
 For example `E.setTimeZone(1)` will be GMT+0100
 
 Time can be set with `setTime`.
 
-**Note:** If daylight savings time rules have been set with `E.setDST()`,
-calling `E.setTimeZone()` will remove them and move back to using a static
-timezone that doesn't change based on the time of year.
+If the `zone` parameter is not a number, it must be the sole argument, an object with the following fields:
+- i: [optional] The canonical ID of the time zone, e.g. `'America/Los_Angeles'`
+- l: [optional] A short user-facing label for the time zone as a whole (the year-round namme, e.g. 'PT')
+- ll: [optional] The concatenation of 0 or more short user-facing labels for the effective time zones
+  represented, e.g. `'PSTPDT'`
+- d: A Int32Array holding a compiled time zone descriptor, as descrbed below.
 
+This latter interface is primarily intended for loading pre-compiled time zone data from external
+sources. Note that the argument is not copied, and can be updated in place if, for example, time zone
+rules are changed administratively.
+
+**Note:** If ESPR_NO_DAYLIGHT_SAVING, then only a numeric `zone` is supported, and arguments after the
+first are ignored.
+
+**Note:** `E.setTimeZone()` provides an alternate (and simpler) interface to this for cases of time
+zones with a regular daylight saving rule, and setting either overrides the other.
+
+Time zone descriptor format:
+- Time zone state:
+  - bits 31:28: 24 (1100).
+  - bits 27:17: zone offset in minutes delay from GMT, so west is positive.
+  - bit 16: true if daylight saving is in effect.
+  - bits 15:6: start offset of state label in field ll.
+  - bits 5:0: length of state label, or 0 if a label is to be synthesised.
+- Repeating annual transition rule:
+  - bits 31:27: 16 (10000).
+  - bits 26:23: month. 0 = January, 3-12 = March-December. See note below for February.
+  - bits 22:18: day of month of earliest possible transition (first week: 1, second week: 8)
+  - bits 17:15: day of week. 1 = Monday, 7 = Sunday, 0 = no restriction, use day of month directly
+  - bits 14:4: minute of day of transition start, in local time. Both 0 and 1440 are valid.
+  - bits 3:0: index from the _end_ of the descriptor block of corresponding time zone state.
+- Single fixed rule:
+  - bit 31: 0
+  - bits 30:4 instant of change, in minutes since 1900-1-1 00:00 (refrenced to GMT).
+  - bits 3:0: index from the _end_ of the descriptor block of corresponding time zone state.
+February is normally represented by month code 1. Code 2 is for an imaginary month that always
+starts 28 days before March, and should be used when describing the _last_ day or week in
+February. Thus, the first week of February is at 1:1, the second at 1:8, and the last at 2:22.
 */
-void jswrap_espruino_setTimeZone(JsVarFloat zone) {
+void jswrap_espruino_setTimeZone(JsVar *zone, bool isDST, JsVar *label, JsVar *tzid) {
 #ifndef ESPR_NO_DAYLIGHT_SAVING
-  jswrap_espruino_setDST(0); // disable DST
+  if ((isDST || label || tzid) && jsvIsNumeric(zone)) {
+    JsVar *_2 = jsvNewFromInteger(2);
+    JsVar *d = jswrap_typedarray_constructor(ARRAYBUFFERVIEW_INT32, _2, 0, 0);
+    jsvUnLock(_2);
+    JsvArrayBufferIterator it;
+    jsvArrayBufferIteratorNew(&it, d, 0);
+    jsvArrayBufferIteratorSetIntegerValue(&it, 0);
+    jsvArrayBufferIteratorNext(&it);
+    jsvArrayBufferIteratorSetIntegerValue(&it,
+        encode_offset(jsvGetFloat(zone) * 60, isDST, 0, 0));
+    jsvArrayBufferIteratorFree(&it);
+    JsVar *z = jsvNewObject();
+    if (tzid) jsvObjectSetChild(z, "i", tzid);
+    jsvObjectSetChildAndUnLock(z, "d", d);
+    if (label) jsvObjectSetChild(z, "l", label);
+    jsvObjectSetChildAndUnLock(execInfo.hiddenRoot, JS_TIMEZONE_VAR, z);
+    return;
+  }
+#else
+  if (jsvIsNumeric(zone))
 #endif
-  // update the timezone var
-  jsvObjectSetChildAndUnLock(execInfo.hiddenRoot, JS_TIMEZONE_VAR,
-      jsvNewFromInteger((int)(zone*60)));
+    jsvObjectSetChild(execInfo.hiddenRoot, JS_TIMEZONE_VAR, zone);
 }
 
 #ifndef ESPR_NO_DAYLIGHT_SAVING
@@ -2039,9 +2116,9 @@ void jswrap_espruino_setTimeZone(JsVarFloat zone) {
   "name" : "setDST",
   "generate" : "jswrap_espruino_setDST",
   "params" : [
-      ["params","JsVarArray","An array containing the settings for DST, or `undefined` to disable"]
+      ["params","JsVarArray","An array containing the settings for DST"]
   ],
-  "typescript" : "setDST(dstOffset: number, timezone: number, startDowNumber: number, startDow: number, startMonth: number, startDayOffset: number, startTimeOfDay: number, endDowNumber: number, endDow: number, endMonth: number, endDayOffset: number, endTimeOfDay: number): void"
+  "typescript" : "setDST(dstOffset: number, timezone: number, startDowNumber: number, startDow: number, startMonth: number, startDayOffset: number, startTimeOfDay: number, endDowNumber: number, endDow: number, endMonth: number, endDayOffset: number, endTimeOfDay: number, stLabel?: string, dstLabel?:string, timeZoneID?: string): void"
 }
 Set the daylight savings time parameters to be used with `Date` objects.
 
@@ -2053,7 +2130,7 @@ The parameters are
 - startDowNumber: The index of the day-of-week in the month when DST starts - 0
   for first, 1 for second, 2 for third, 3 for fourth and 4 for last
 - startDow: The day-of-week for the DST start calculation - 0 for Sunday, 6 for
-  Saturday
+  Saturday. -1 if there is no such constraint
 - startMonth: The number of the month that DST starts - 0 for January, 11 for
   December
 - startDayOffset: The number of days between the selected day-of-week and the
@@ -2068,6 +2145,9 @@ The parameters are
 - endDayOffset: The number of days between the selected day-of-week and the
   actual day that DST ends - usually 0
 - endTimeOfDay: The number of minutes elapsed in the day before DST ends
+- stLabel: [optional] A short user-facing label for the standard time zone, e,g, PST
+- dstLabel: [optional] A short user-facing label for daylight time, e.g. PDT
+- timeZoneID: [optional] The canonical ID of the time zone, e.g. America/Los_Angeles
 
 To determine what the `dowNumber, dow, month, dayOffset, timeOfDay` parameters
 should be, start with a sentence of the form "DST starts on the last Sunday of
@@ -2091,30 +2171,68 @@ Examples:
 // United Kingdom
 E.setDST(60,0,4,0,2,0,60,4,0,9,0,120);
 // California, USA
-E.setDST(60,-480,1,0,2,0,120,0,0,10,0,120);
+E.setDST(60,-480,1,0,2,0,120,0,0,10,0,120,'PST','PDT','America/Los_Angeles');
 // Or adjust -480 (-8 hours) for other US states
 // Ukraine
 E.setDST(60,120,4,0,2,0,180,4,0,9,0,240);
 ```
 
-**Note:** This is not compatible with `E.setTimeZone()`. Calling `E.setTimeZone()`
-after this will disable DST.
+**Note:** This is an alternate interface to `E.setTimeZone()`, and setting 
+either overrides the other.
 
 */
 void jswrap_espruino_setDST(JsVar *params) {
-  if (jsvIsUndefined(params)) {
-    jsvObjectRemoveChild(execInfo.hiddenRoot, JS_DST_SETTINGS_VAR);
+  // We could plausibly reimplement this in JS as a library routine
+  if (!jsvIsArray(params) || jsvGetLength(params) < 12 || jsvGetLength(params) > 15) {
+    jsExceptionHere(JSET_ERROR, "Incorrect argument count");
     return;
   }
-  if (!jsvIsArray(params) || jsvGetLength(params) != 12) {
-    jsExceptionHere(JSET_ERROR, "Unexpected arguments");
-    return;
+  JsVarInt p[12] = {0};
+  JsVar *t[3] = {0};
+  JsvIterator it;
+  jsvIteratorNew(&it, params, JSIF_DEFINED_ARRAY_ElEMENTS);
+  while (jsvIteratorHasElement(&it)) {
+    JsVar *idx = jsvIteratorGetKey(&it);
+    if (jsvIsInt(idx)) {
+      JsVar *val = jsvIteratorGetValue(&it);
+      JsVarInt i = jsvGetIntegerAndUnLock(idx);
+      if (i < 12) {
+        p[i] = jsvGetIntegerAndUnLock(val);
+      } else {
+        t[i-12] = val;
+      }
+      jsvIteratorNext(&it);
+    }
   }
-  // remove timezone var
-  jsvObjectRemoveChild(execInfo.hiddenRoot, JS_TIMEZONE_VAR);
-  // write DST var
-  JsVar *dst = jswrap_typedarray_constructor(ARRAYBUFFERVIEW_INT16, params, 0, 0);
-  jsvObjectSetChildAndUnLock(execInfo.hiddenRoot, JS_DST_SETTINGS_VAR, dst);
+  jsvIteratorFree(&it);
+  int tl[2] = {t[0] ? (int)jsvGetStringLength(t[0]) : 0, t[1] ? (int)jsvGetStringLength(t[1]) : 0};
+  JsVar *_4 = jsvNewFromInteger(4);
+  JsVar *d = jswrap_typedarray_constructor(ARRAYBUFFERVIEW_INT32, _4, 0, 0);
+  jsvUnLock(_4);
+  JsVarInt sp = encode_dst_trigger(p + 2, 1);
+  JsVarInt sv = encode_offset(p[1] + p[0], true, tl[0], tl[1]);
+  JsVarInt ep = encode_dst_trigger(p + 7, 0);
+  JsVarInt ev = encode_offset(p[1], false, 0, tl[0]);
+  unsigned o = (unsigned)sp > (unsigned)ep; // Southern hemisphere, flip start and end
+  JsvArrayBufferIterator jt;
+  jsvArrayBufferIteratorNew(&jt, d, 0);
+  jsvArrayBufferIteratorSetIntegerValue(&jt, o ? ep : sp); jsvArrayBufferIteratorNext(&jt);
+  jsvArrayBufferIteratorSetIntegerValue(&jt, o ? sp : ep); jsvArrayBufferIteratorNext(&jt);
+  jsvArrayBufferIteratorSetIntegerValue(&jt, sv); jsvArrayBufferIteratorNext(&jt);
+  jsvArrayBufferIteratorSetIntegerValue(&jt, ev); jsvArrayBufferIteratorFree(&jt);
+  JsVar *dst = jsvNewObject();
+  if (t[2]) jsvObjectSetChildAndUnLock(dst, "i", t[2]);
+  jsvObjectSetChildAndUnLock(dst, "d", d);
+  if (t[0] && t[1]) {
+    JsVar *l = jsvNewFromEmptyString();
+    jsvAppendStringVarComplete(l, t[0]);
+    jsvAppendStringVarComplete(l, t[1]);
+    jsvUnLock2(t[0], t[1]);
+    jsvObjectSetChildAndUnLock(dst, "ll", l);
+  } else if (t[0] || t[1]) {
+    jsvObjectSetChildAndUnLock(dst, "l", t[0] ?: t[1]);
+  }
+  jsvObjectSetChildAndUnLock(execInfo.hiddenRoot, JS_TIMEZONE_VAR, dst);
 }
 #endif
 

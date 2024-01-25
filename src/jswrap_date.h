@@ -31,15 +31,9 @@ typedef struct {
   int dow; ///< 0..6, Sunday is 0
 } CalendarDate;
 
-int getDayNumberFromDate(int y, int m, int d);
-void getDateFromDayNumber(int day, int *y, int *m, int *date);
-#ifndef ESPR_NO_DAYLIGHT_SAVING
-JsVarFloat getDstChangeTime(int y, int dow_number, int month, int dow, int day_offset, int timeOfDay, bool is_start, int dst_offset, int timezone, bool as_local_time);
-#endif
 int jstGetEffectiveTimeZone(JsVarFloat ms, bool is_local_time, bool *is_dst);
-void setCorrectTimeZone(TimeInDay *td);
-TimeInDay getTimeFromMilliSeconds(JsVarFloat ms_in, bool forceGMT);
-JsVarFloat fromTimeInDay(TimeInDay *td);
+TimeInDay getTimeFromMilliSeconds(JsVarFloat ms_in, JsVar *tz);
+JsVarFloat fromTimeInDay(TimeInDay *td, JsVar *parent);
 CalendarDate getCalendarDate(int d);
 int fromCalenderDate(CalendarDate *date);
 
@@ -59,7 +53,7 @@ int jswrap_date_getDate(JsVar *parent);
 int jswrap_date_getMonth(JsVar *parent);
 int jswrap_date_getFullYear(JsVar *parent);
 #ifndef ESPR_NO_DAYLIGHT_SAVING
-int jswrap_date_getIsDST(JsVar *parent);
+bool jswrap_date_getIsDST(JsVar *parent);
 #endif
 
 JsVarFloat jswrap_date_setHours(JsVar *parent, int hoursValue, JsVar *minutesValue, JsVar *secondsValue, JsVar *millisecondsValue);
@@ -74,6 +68,14 @@ JsVar *jswrap_date_toString(JsVar *parent);
 JsVar *jswrap_date_toUTCString(JsVar *parent);
 JsVar *jswrap_date_toISOString(JsVar *parent);
 JsVar *jswrap_date_toLocalISOString(JsVar *parent);
-JsVarFloat jswrap_date_parse(JsVar *str);
+JsVarFloat jswrap_date_parse(JsVar *str, JsVar *tz);
+
+#ifndef ESPR_NO_DAYLIGHT_SAVING
+JsVar *jswrap_date_getTimeLabel(JsVar *date);
+JsVar *jswrap_date_getTimezoneLabel(JsVar *date);
+JsVar *jswrap_date_getTimezoneID(JsVar *date);
+JsVar *jswrap_date_getNextTransition(JsVar *date);
+JsVar *jswrap_date_getPreviousTransition(JsVar *date);
+#endif
 
 #endif // JSWRAP_DATE_H_

@@ -62,7 +62,7 @@ JsVar *jswrap_espruino_CRC32(JsVar *data);
 JsVar *jswrap_espruino_HSBtoRGB(JsVarFloat hue, JsVarFloat sat, JsVarFloat bri, int format);
 void jswrap_espruino_setPassword(JsVar *pwd);
 void jswrap_espruino_lockConsole();
-void jswrap_espruino_setTimeZone(JsVarFloat zone);
+void jswrap_espruino_setTimeZone(JsVar *zone, bool isDST, JsVar *label, JsVar *tzid);
 #ifndef ESPR_NO_DAYLIGHT_SAVING
 void jswrap_espruino_setDST(JsVar *params);
 #endif
