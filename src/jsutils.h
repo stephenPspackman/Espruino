@@ -27,9 +27,9 @@
 #endif
 
 #ifndef BUILDNUMBER
-#define JS_VERSION "2v19"
+#define JS_VERSION "2v20"
 #else
-#define JS_VERSION "2v19." BUILDNUMBER
+#define JS_VERSION "2v20." BUILDNUMBER
 #endif
 /*
   In code:
@@ -51,6 +51,7 @@
 #define ESPR_NO_CLASSES 1
 #define ESPR_NO_ARROW_FN 1
 #define ESPR_NO_REGEX 1
+#define ESPR_NO_PRETOKENISE 1
 #define ESPR_NO_TEMPLATE_LITERAL 1
 #define ESPR_NO_SOFTWARE_SERIAL 1
 #ifndef ESPR_NO_SOFTWARE_I2C

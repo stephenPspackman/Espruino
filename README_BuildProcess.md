@@ -146,6 +146,8 @@ This is a partial list of definitions that can be added in a `BOARD.py` file's `
 * `ESPR_NO_SOFTWARE_SERIAL` - don't build in software serial support
 * `ESPR_NO_SOFTWARE_I2C` - don't build in software I2C support
 * `ESPR_NO_BLUETOOTH_MESSAGES` - don't include text versions of Bluetooth error messages (just the error number)
+* `ESPR_USE_STEPPER_TIMER` - add builtin `Stepper` class to handle higher speed stepper handling
+* `ESPR_LIMIT_DATE_RANGE` - limits the acceptable range for Date years (saves a few hundred bytes)
 
 These are set automatically when `SAVE_ON_FLASH` is set (see `jsutils.h`)
 
@@ -156,6 +158,7 @@ These are set automatically when `SAVE_ON_FLASH` is set (see `jsutils.h`)
 * `ESPR_NO_LINE_NUMBERS` - disable storing and reporting of Line Numbers. Usually these take 1 var per function, but if we're executing a function from flash we can just work it out from the file when needed
 * `ESPR_NO_LET_SCOPING` - don't create scopes for `let` (treat it like `var`, which was the 2v13 and earlier behaviour)
 * `ESPR_NO_PROMISES` - Don't include promise-handling functions
+* `ESPR_NO_PRETOKENISE` - Don't include code to pretokenise functions marked with `"ram"` - code pretokenised in the IDE can still be executed
 
 
 ### chip

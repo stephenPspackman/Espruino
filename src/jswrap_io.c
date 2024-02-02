@@ -203,6 +203,10 @@ Objects can contain:
 * `forceSoft` - boolean, If true software PWM is used even if hardware PWM or a
   DAC is available
 
+On nRF52-based devices (Puck.js, Pixl.js, MDBT42Q, etc) hardware PWM runs at
+16MHz, with a maximum output frequency of 4MHz (but with only 2 bit (0..3) accuracy).
+At 1Mhz, you have 4 bits (0..15), 1kHz = 14 bits and so on.
+
  **Note:** if you didn't call `pinMode` beforehand then this function will also
  reset pin's state to `"output"`
  */
@@ -210,10 +214,10 @@ void jswrap_io_analogWrite(Pin pin, JsVarFloat value, JsVar *options) {
   JsVarFloat freq = 0;
   JshAnalogOutputFlags flags = JSAOF_NONE;
   if (jsvIsObject(options)) {
-    freq = jsvGetFloatAndUnLock(jsvObjectGetChildIfExists(options, "freq"));
-    if (jsvGetBoolAndUnLock(jsvObjectGetChildIfExists(options, "forceSoft")))
+    freq = jsvObjectGetFloatChild(options, "freq");
+    if (jsvObjectGetBoolChild(options, "forceSoft"))
           flags |= JSAOF_FORCE_SOFTWARE;
-    else if (jsvGetBoolAndUnLock(jsvObjectGetChildIfExists(options, "soft")))
+    else if (jsvObjectGetBoolChild(options, "soft"))
       flags |= JSAOF_ALLOW_SOFTWARE;
   }
 
@@ -796,8 +800,8 @@ JsVar *jswrap_interface_setWatch(
       jsExceptionHere(JSET_TYPEERROR, "'edge' in setWatch should be 1, -1, 0, 'rising', 'falling' or 'both'");
       return 0;
     }
-    isIRQ = jsvGetBoolAndUnLock(jsvObjectGetChildIfExists(repeatOrObject, "irq"));
-    isHighSpeed = jsvGetBoolAndUnLock(jsvObjectGetChildIfExists(repeatOrObject, "hispeed"));
+    isIRQ = jsvObjectGetBoolChild(repeatOrObject, "irq");
+    isHighSpeed = jsvObjectGetBoolChild(repeatOrObject, "hispeed");
     dataPin = jshGetPinFromVarAndUnLock(jsvObjectGetChildIfExists(repeatOrObject, "data"));
   } else
     repeat = jsvGetBool(repeatOrObject);

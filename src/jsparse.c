@@ -167,13 +167,16 @@ JsVar *jspeiFindChildFromStringInParents(JsVar *parent, const char *name) {
     const char *objectName = jswGetBasicObjectName(parent);
     while (objectName) {
       JsVar *objName = jsvFindChildFromString(execInfo.root, objectName);
+      if (!objName) {
+        objName = jspNewPrototype(objectName, true/*object*/);
+      }
       if (objName) {
         JsVar *result = 0;
         JsVar *obj = jsvSkipNameAndUnLock(objName);
         // could be something the user has made - eg. 'Array=1'
         if (jsvHasChildren(obj)) {
           // We have found an object with this name - search for the prototype var
-          JsVar *proto = jsvObjectGetChildIfExists(obj, JSPARSE_PROTOTYPE_VAR);
+          JsVar *proto = jspGetNamedField(obj, JSPARSE_PROTOTYPE_VAR, false);
           if (proto) {
             result = jsvFindChildFromString(proto, name);
             jsvUnLock(proto);
@@ -313,7 +316,7 @@ NO_INLINE bool jspeFunctionArguments(JsVar *funcVar) {
         jspSetError(false);
         return false;
       }
-      jsvMakeFunctionParameter(param); // force this to be called a function parameter
+      param = jsvMakeFunctionParameter(param); // force this to be called a function parameter
       jsvUnLock(param);
     }
     JSP_MATCH(LEX_ID);
@@ -341,11 +344,14 @@ NO_INLINE bool jspeFunctionDefinitionInternal(JsVar *funcVar, bool expressionOnl
       JsVar *tokenValue = jslGetTokenValueAsVar();
       if (jsvIsStringEqual(tokenValue, "compiled")) {
         jsWarn("Function marked with \"compiled\" uploaded in source form");
-      } else if (jsvIsStringEqual(tokenValue, "ram")) {
+      }
+#ifndef ESPR_NO_PRETOKENISE
+      else if (jsvIsStringEqual(tokenValue, "ram")) {
         JSP_ASSERT_MATCH(LEX_STR);
         if (lex->tk==';') JSP_ASSERT_MATCH(';');
         forcePretokenise = true;
       }
+#endif
 #ifdef ESPR_JIT
       else if (jsvIsStringEqual(tokenValue, "jit")) {
         JslCharPos funcCodeStart;
@@ -440,11 +446,12 @@ NO_INLINE bool jspeFunctionDefinitionInternal(JsVar *funcVar, bool expressionOnl
         funcCodeVar = jsvNewFlashString(lex->sourceVar->varData.nativeStr.ptr + s, (unsigned int)(lastTokenEnd - s));
 #endif
     } else {
-      if (jsfGetFlag(JSF_PRETOKENISE) || forcePretokenise) {
+#ifndef ESPR_NO_PRETOKENISE
+      if (jsfGetFlag(JSF_PRETOKENISE) || forcePretokenise)
         funcCodeVar = jslNewTokenisedStringFromLexer(&funcBegin, (size_t)lastTokenEnd);
-      } else {
+      else
+#endif
         funcCodeVar = jslNewStringFromLexer(&funcBegin, (size_t)lastTokenEnd);
-      }
     }
     jsvAddNamedChildAndUnLock(funcVar, funcCodeVar, JSPARSE_FUNCTION_CODE_NAME);
     // scope var
@@ -771,7 +778,7 @@ NO_INLINE JsVar *jspeFunctionCall(JsVar *function, JsVar *functionName, JsVar *t
 
       // setup a the function's name (if a named function)
       if (functionInternalName) {
-        JsVar *name = jsvMakeIntoVariableName(jsvNewFromStringVar(functionInternalName,0,JSVAPPENDSTRINGVAR_MAXLENGTH), function);
+        JsVar *name = jsvMakeIntoVariableName(jsvNewFromStringVarComplete(functionInternalName), function);
         jsvAddName(functionRoot, name);
         jsvUnLock2(name, functionInternalName);
       }
@@ -940,7 +947,8 @@ NO_INLINE JsVar *jspeFunctionCall(JsVar *function, JsVar *functionName, JsVar *t
 
     return returnVar;
   } else if (isParsing) { // ---------------------------------- function, but not executing - just parse args and be done
-    jspeParseFunctionCallBrackets();
+    if (jspCheckStackPosition()) // check for stack overflow
+      jspeParseFunctionCallBrackets();
     /* Do not return function, as it will be unlocked! */
     return 0;
   } else return 0;
@@ -1024,7 +1032,7 @@ static NO_INLINE JsVar *jspGetNamedFieldInParents(JsVar *object, const char* nam
     } else if (strcmp(name, JSPARSE_INHERITS_VAR)==0) {
       const char *objName = jswGetBasicObjectName(object);
       if (objName) {
-        JsVar *p = jsvSkipNameAndUnLock(jspNewPrototype(objName));
+        JsVar *p = jsvSkipNameAndUnLock(jspNewPrototype(objName, false/*prototype*/));
         // jspNewPrototype returns a 'prototype' name that's already a child of eg. an array
         // Create a new 'name' called __proto__ that links to it
         JsVar *i = jsvNewNameFromString(JSPARSE_INHERITS_VAR);
@@ -1052,10 +1060,12 @@ JsVar *jspGetNamedField(JsVar *object, const char* name, bool returnName) {
     child = jsvFindChildFromString(object, name);
 
   if (!child) {
-    child = jspGetNamedFieldInParents(object, name, returnName);
+    bool isPrototypeVar = strcmp(name, JSPARSE_PROTOTYPE_VAR)==0;
+    if (!isPrototypeVar) // only look in parents if it's not the prototype variable
+      child = jspGetNamedFieldInParents(object, name, returnName);
 
     // If not found and is the prototype, create it
-    if (!child && jsvIsFunction(object) && strcmp(name, JSPARSE_PROTOTYPE_VAR)==0) {
+    if (!child && jsvIsFunction(object) && isPrototypeVar) {
       JsVar *value = jsvNewObject(); // prototype is supposed to be an object
       child = jsvAddNamedChild(object, value, JSPARSE_PROTOTYPE_VAR);
       jsvUnLock(value);
@@ -1310,7 +1320,6 @@ NO_INLINE JsVar *jspeFactorFunctionCall() {
   while ((lex->tk=='(' || (isConstructor && JSP_SHOULD_EXECUTE)) && !jspIsInterrupted()) {
     JsVar *funcName = a;
     JsVar *func = jsvSkipName(funcName);
-
     /* The constructor function doesn't change parsing, so if we're
      * not executing, just short-cut it. */
     if (isConstructor && JSP_SHOULD_EXECUTE) {
@@ -1459,7 +1468,7 @@ NO_INLINE JsVar *jspeFactorArray() {
     if (JSP_SHOULD_EXECUTE) {
       if (lex->tk != ',') { // #287 - [,] and [1,2,,4] are allowed
         JsVar *aVar = aVar = jsvSkipNameAndUnLock(jspeAssignmentExpression());
-        JsVar *indexName = indexName = jsvMakeIntoVariableName(jsvNewFromInteger(idx),  aVar);
+        JsVar *indexName = jsvMakeIntoVariableName(jsvNewFromInteger(idx),  aVar);
         if (indexName) { // could be out of memory
           jsvAddName(contents, indexName);
           jsvUnLock(indexName);
@@ -1612,7 +1621,7 @@ NO_INLINE JsVar *jspeAddNamedFunctionParameter(JsVar *funcVar, JsVar *name) {
     size_t l = jsvGetString(name, &buf[1], JSLEX_MAX_TOKEN_LENGTH);
     buf[l+1] = 0; // zero terminate since jsvGetString doesn't add one
     JsVar *param = jsvAddNamedChild(funcVar, 0, buf);
-    jsvMakeFunctionParameter(param);
+    param = jsvMakeFunctionParameter(param);
     jsvUnLock(param);
   }
   return funcVar;
@@ -2729,8 +2738,7 @@ NO_INLINE JsVar *jspeStatementFor() {
             jsvUnLock(iterable);
           }
         }
-        assert(!foundPrototype);
-        jsvUnLock(foundPrototype); // just in case...
+        jsvUnLock(foundPrototype);
         jsvIteratorFree(&it);
       } else if (!jsvIsUndefined(array)) {
         jsExceptionHere(JSET_ERROR, "FOR loop can only iterate over Arrays, Strings or Objects, not %t", array);
@@ -3087,7 +3095,7 @@ JsVar *jspNewBuiltin(const char *instanceOf) {
 }
 
 /// Create a new Class of the given instance and return its prototype (as a name 'prototype')
-NO_INLINE JsVar *jspNewPrototype(const char *instanceOf) {
+NO_INLINE JsVar *jspNewPrototype(const char *instanceOf, bool returnObject) {
   JsVar *objFuncName = jsvFindOrAddChildFromString(execInfo.root, instanceOf);
   if (!objFuncName) // out of memory
     return 0;
@@ -3106,16 +3114,16 @@ NO_INLINE JsVar *jspNewPrototype(const char *instanceOf) {
 
   JsVar *prototypeName = jsvFindOrAddChildFromString(objFunc, JSPARSE_PROTOTYPE_VAR);
   jspEnsureIsPrototype(objFunc, prototypeName); // make sure it's an object
-  jsvUnLock2(objFunc, objFuncName);
+  jsvUnLock2(returnObject ? prototypeName : objFunc, objFuncName);
 
-  return prototypeName;
+  return returnObject ? objFunc : prototypeName;
 }
 
 /** Create a new object of the given instance and add it to root with name 'name'.
  * If name!=0, added to root with name, and the name is returned
  * If name==0, not added to root and Object itself returned */
 NO_INLINE JsVar *jspNewObject(const char *name, const char *instanceOf) {
-  JsVar *prototypeName = jspNewPrototype(instanceOf);
+  JsVar *prototypeName = jspNewPrototype(instanceOf, false/*prototype*/);
 
   JsVar *obj = jsvNewObject();
   if (!obj) { // out of memory

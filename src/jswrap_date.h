@@ -35,7 +35,7 @@ int jstGetEffectiveTimeZone(JsVarFloat ms, bool is_local_time, bool *is_dst);
 TimeInDay getTimeFromMilliSeconds(JsVarFloat ms_in, JsVar *tz);
 JsVarFloat fromTimeInDay(TimeInDay *td, JsVar *parent);
 CalendarDate getCalendarDate(int d);
-int fromCalenderDate(CalendarDate *date);
+int fromCalendarDate(CalendarDate *date);
 
 JsVarFloat jswrap_date_now();
 JsVar *jswrap_date_from_milliseconds(JsVarFloat time);

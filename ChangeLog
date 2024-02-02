@@ -1,3 +1,25 @@
+     2v21 : nRF52: free up 800b more flash by removing vector table padding
+            Throw Exception when a Promise tries to resolve with another Promise (#2450)
+            Add 'lcdBufferPtr' to Bangle.getOptions
+            Allow E.nativeCall to take 32 bit floats (eg for Inline C)
+            Add built-in Stepper motor handling with the `Stepper` class (if enabled in build)
+            Fix issue requesting constructor of builtin before the class itself has been accessed (fix #2451)
+            Allow pretokenisation to store raw, unencoded Strings for speed/efficiency
+            Automatic decoding and pretokenisation of 'atob(".....")' strings
+            Pull out pretokenisation on SAVE_ON_FLASH boards (pretokenised code can be executed, it's just not tokenised in Espruino - saves 1kb)
+            Bangle.js: Fix out of bounds coordinates in LCD code that caused screen corruption on newer GCC builds (#2455)
+            Bangle.js2: In flash bootloader, don't store flash write code in RAM (no need) (fix #2458)
+            Remove 65535-char max native string length restriction introduced in 2v20 on devices that could support more like Bangle.js 2
+            E.memoryArea(0, ...) now returns `undefined`
+            Fix issue using Flat/Flash/Native Strings to create fields in objects
+            Optimise pretokenised Strings so we load very short strings direct to RAM
+            Add jsvGet...Child functions to replace common call patterns - saves 280 bytes on Pico
+            Fix issue with g.wrapString when running on flash-based strings
+            Fix lock leak when using flat/flash/native strings as object indices
+            Fix g.wrapString lockup if wrap width is less than the character width
+            Fix potential for crash after ReferenceError during function declaration (fix #2457)
+            STM32: (Original/Pico/WiFi) if USB connected but PC not receiving data, throw away USB data rather than blocking (fix #2446)
+
      2v20 : Ensure String.charCodeAt returns NaN for out of bounds chars
             Bangle.js2: When rendering overlays, *do not* use the current FG/BG color for 1 bit overlays
             nRF52 SDK15: Fix UART when >1 central link enabled
@@ -43,6 +65,10 @@
             Microbit2: Set up SCK/LRCK to unused pins for neopixel to ensure neopixel will work ok
             ESP8266/others: Fix ArrayBuffers with 12 bit JsVars (previously they overflowed)
             Ensure E.setDST disables E.setTimeZone, and vice-versa. 
+            Added console.debug/info/warn/error as aliases of console.log
+            nRF5x: Fix INVALID_PARAM error when connecting to other BLE device when maxInterval or NRF.setLowPowerConnection specified 
+            Bangle.js2: Add 'Test' option to factory reset menu, and Bangle.showTestScreen()
+            Added Pin.pulse/pwm/analog as aliases of digitalPulse,analogWrite,analogRead
 
      2v19 : Fix Object.values/entries for numeric keys after 2v18 regression (fix #2375)
             nRF52: for SD>5 use static buffers for advertising and scan response data (#2367)

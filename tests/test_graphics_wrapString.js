@@ -40,6 +40,11 @@ g.clear().setFont("4x6");
 lines = g.wrapString("X", 10);
 SHOULD_BE(lines, ["X"]);
 
+// wrapping when the area is too small to show even one char
+g.clear().setFont("4x6");
+lines = g.wrapString("XYZ", 2);
+SHOULD_BE(lines, ["X","Y","Z"]);
+
 // wrap a long word to multiple lines
 g.clear().setFont("4x6");
 lines = g.wrapString("ABCDEFGHIJ", 10);
@@ -106,5 +111,14 @@ SHOULD_BE(lines, ["\0\x08\x08\1\1\2\3\4\5\6\7\8","\0\x08\x08\1\1\2\3\4\5\6\7\8",
 g.clear().setFont("4x6");
 lines = g.wrapString("F\u00F6n K\u00FCr B\u00E4r", 200);
 SHOULD_BE(lines, ["F\u00F6n K\u00FCr B\u00E4r"]);
+
+// Using wrapstring from Storage
+require("Storage").write("x","Compacting...\nTakes approx\n1 minute")
+lines = g.wrapString(require("Storage").read("x"), 176)
+require("Storage").erase("x")
+SHOULD_BE(lines, ["Compacting...","Takes approx","1 minute"]);
+
+
+
 
 result = ok;
