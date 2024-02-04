@@ -918,7 +918,7 @@ advertise battery level and its name as well as both Eddystone and iBeacon :
 
 ```
 NRF.setAdvertising([
-  {0x180F : [Puck.getBatteryPercentage()]}, // normal advertising, with battery %
+  {0x180F : [E.getBattery()]}, // normal advertising, with battery %
   require("ble_ibeacon").get(...), // iBeacon
   require("ble_eddystone").get(...), // eddystone
 ], {interval:300});
@@ -1747,8 +1747,7 @@ void jswrap_ble_updateServices(JsVar *data) {
 #endif
             }
           }
-          jsvUnLock(charValue);
-          jsvUnLock(charVar);
+          jsvUnLock2(charValue, charVar);
         } else {
           JsVar *str = bleUUIDToStr(char_uuid);
           jsExceptionHere(JSET_ERROR, "Unable to find service with UUID %v", str);
