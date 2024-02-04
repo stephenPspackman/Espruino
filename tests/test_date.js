@@ -1,6 +1,7 @@
 count=0;
 pass=0;
 
+exc = x => {try {count++; pass++; x(); pass--;} catch (e) {}};
 tot = x => (x.forEach(x => pass += x[0] == x[1]), count += x.length);
 arr = x => {const r = Int32Array(x.length); r.set(x); return r};
 rule = (endrel, mon, dom, dow, min, idx) => 0x80000000 
@@ -11,12 +12,12 @@ state = (offs, dst, start, len) => 0xc0000000
 up = x => new Date(new Date(x) + 1000);
 dn = x => new Date(new Date(x) - 1000);
 
-try { new Date(4.1e16); pass--; } catch(e) { };
-try { new Date(-4.1e16); pass--; } catch(e) { };
-try { new Date(2000000,0); pass--; } catch(e) { };
-try { new Date(-2000000,0); pass--; } catch(e) { };
+exc(() => new Date(4.1e16));
+exc(() => new Date(-4.1e16));
+exc(() => new Date(2000000,0));
+exc(() => new Date(-2000000,0));
 // This next Date() constructor use to give a segfault. However it is now out of range for the PICO_R1_3
-try { a = new Date(-12,8).toString(); if (!(a== "Wed Aug 31 -12 00:00:00 GMT+0000")) pass--; } catch (e) { };
+try { count++; pass++; a = new Date(-12,8).toString(); if (!(a== "Wed Aug 31 -12 00:00:00 GMT+0000")) pass--; } catch (e) { };
 
 var gmt = [
 [ Date.parse("2011-10-20") , 1319068800000.0 ],
@@ -27,12 +28,12 @@ var gmt = [
 [ Date.parse("Thu, 01 Jan 1970 00:00:00 GMT-0100") , 3600000.0 ],
 [ Date.parse("Mon, 25 Dec 1995 13:30:00 +0430"), 819882000000.0 ],
 [ new Date(807926400000.0).toString() , "Wed Aug 9 1995 00:00:00 GMT+0000" ],
-[ new Date("Fri, 20 Jun 2014 15:27:22 GMT").toString(), "Fri Jun 20 2014 15:27:22 GMT+0000"],
-[ new Date("Fri, 20 Jun 2014 15:27:22 GMT").toISOString(), "2014-06-20T15:27:22.000Z"],
-[ new Date("Fri, 20 Jun 2014 17:27:22 GMT+0200").toISOString(), "2014-06-20T15:27:22.000Z"]
-[ new Date("5000-1-1").toString(), "Wed Jan 1 5000 00:00:00 GMT+0000"],
-[ new Date(1500,0,1).toString(), "Mon Jan 1 1500 00:00:00 GMT+0000"],
-[ new Date(1500,0,1).getTime(), -14831769600000],
+[ new Date("Fri, 20 Jun 2014 15:27:22 GMT").toString(), "Fri Jun 20 2014 15:27:22 GMT+0000" ],
+[ new Date("Fri, 20 Jun 2014 15:27:22 GMT").toISOString(), "2014-06-20T15:27:22.000Z" ],
+[ new Date("Fri, 20 Jun 2014 17:27:22 GMT+0200").toISOString(), "2014-06-20T15:27:22.000Z" ],
+[ new Date("5000-1-1").toString(), "Wed Jan 1 5000 00:00:00 GMT+0000" ],
+[ new Date(1500,0,1).toString(), "Mon Jan 1 1500 00:00:00 GMT+0000" ],
+[ new Date(1500,0,1).getTime(), -14831769600000 ],
 [ new Date("2011-10-20").getTimezoneOffset(), 0 ],
 [ new Date("2011-10-20").getTimeLabel(), "+0" ],
 [ new Date("2011-10-20").getTimezoneLabel(), "+0" ],
@@ -118,12 +119,13 @@ var mixed = [
 [ new Date("2024-1-4 21:12").toString(), "Thu Jan 4 2024 21:12:00 GMT-0330" ],
 [ new Date("2024-1-4 21:12").toUTCString(), "Fri, 5 Jan 2024 00:42:00 GMT" ],
 [ new Date("2024-01-05T00:42:00Z").toString(), "Thu Jan 4 2024 21:12:00 GMT-0330" ],
-[ new Date("2024-1-4 21:12", -8).toString(), "Thu Jan 4 2024 21:12:00 GMT-0800" ],
-[ new Date("2024-1-4 21:12", -8).toUTCString(), "Fri, 5 Jan 2024 05:12:00 GMT" ],
-[ new Date("2024-01-05T00:42:00Z", -8).toString(), "Thu Jan 4 2024 16:42:00 GMT-0800" ],
-[ new Date("Jan 5, 2024 02:42:00 +0200", -8).toString(), "Thu Jan 4 2024 16:42:00 GMT-0800" ],
-[ new Date("Jan 4, 2024 16:42:00 -0800", true).toString(), "Thu Jan 4 2024 16:42:00 GMT-0800" ],
-[ new Date("Jan 4, 2024 21:12:00", true).toString(), "Thu Jan 4 2024 21:12:00 GMT-0330" ],
+[ Date.zoned(-8, "2024-1-4 21:12").toString(), "Thu Jan 4 2024 21:12:00 GMT-0800" ],
+[ Date.zoned(-8, "2024-1-4 21:12").toUTCString(), "Fri, 5 Jan 2024 05:12:00 GMT" ],
+[ Date.zoned(-8, "2024-01-05T00:42:00Z").toString(), "Thu Jan 4 2024 16:42:00 GMT-0800" ],
+[ Date.zoned(-8, "Jan 5, 2024 02:42:00 +0200").toString(), "Thu Jan 4 2024 16:42:00 GMT-0800" ],
+[ Date.zoned(true, "Jan 4, 2024 16:42:00 -0800").toString(), "Thu Jan 4 2024 16:42:00 GMT-0800" ],
+[ Date.zoned(false, "Jan 4, 2024 16:42:00 -0800").toString(), "Thu Jan 4 2024 21:12:00 GMT-0330" ],
+[ Date.zoned(true, "Jan 4, 2024 21:12:00").toString(), "Thu Jan 4 2024 21:12:00 GMT-0330" ],
 ];
 tot(mixed);
 
@@ -219,19 +221,19 @@ var ddt = [
 ];
 tot(ddt);
 
-//Zoned time objects
 E.setTimeZone(2);
 var zoned = [
 [ new Date("2024-10-21 11:10").toString(), "Mon Oct 21 2024 11:10:00 GMT+0200" ],
 [ new Date(2024, 9, 21, 11, 11, 0, 0).toString(), "Mon Oct 21 2024 11:11:00 GMT+0200" ],
+[ Date.zoned(0, 2024, 9, 21, 11, 11, 0, 0).toString(), "Mon Oct 21 2024 11:11:00 GMT+0000" ],
 [ new Date(1729501860000).toString(), "Mon Oct 21 2024 11:11:00 GMT+0200" ],
 [ new Date("2024-10-21 11:12 +0600").toString(), "Mon Oct 21 2024 07:12:00 GMT+0200" ],
-[ new Date("2024-10-21 11:12 +0600", true).toString(), "Mon Oct 21 2024 11:12:00 GMT+0600" ],
-[ new Date("2024-10-21 11:13", 4).toString(), "Mon Oct 21 2024 11:13:00 GMT+0400" ],
-[ new Date("2024-10-21 11:14 +0600", 4).toString(), "Mon Oct 21 2024 09:14:00 GMT+0400" ],
-[ new Date(2024, 9, 21, 11, 15, 0, 0, 4).toString(), "Mon Oct 21 2024 11:15:00 GMT+0400" ],
-[ new Date(1729501860000, 4).toString(), "Mon Oct 21 2024 13:11:00 GMT+0400" ],
-[ new Date("2024-10-21 11:16", {ll:'STDSTDDT',
+[ Date.zoned(true, "2024-10-21 11:12 +0600").toString(), "Mon Oct 21 2024 11:12:00 GMT+0600" ],
+[ Date.zoned(4, "2024-10-21 11:13").toString(), "Mon Oct 21 2024 11:13:00 GMT+0400" ],
+[ Date.zoned(4, "2024-10-21 11:14 +0600").toString(), "Mon Oct 21 2024 09:14:00 GMT+0400" ],
+[ Date.zoned(4, 2024, 9, 21, 11, 15, 0, 0).toString(), "Mon Oct 21 2024 11:15:00 GMT+0400" ],
+[ Date.zoned(4, 1729501860000).toString(), "Mon Oct 21 2024 13:11:00 GMT+0400" ],
+[ Date.zoned({ll:'STDSTDDT',
     d:arr([
         rule(true ,  2, 22, 7, 120, 1),
         rule(true,   4, 17, 1, 120, 2),
@@ -240,8 +242,8 @@ var zoned = [
         state(120,  true, 5, 3),
         state( 60,  true, 2, 3),
         state(  0, false, 0, 2)
-    ])}).toString(), "Mon Oct 21 2024 11:16:00 GMT+0100" ],
-[ new Date(2024, 9, 21, 11, 17, 0, 0, {ll:'STDSTDDT',
+    ])}, "2024-10-21 11:16").toString(), "Mon Oct 21 2024 11:16:00 GMT+0100" ],
+[ Date.zoned({ll:'STDSTDDT',
     d:arr([
         rule(true ,  2, 22, 7, 120, 1),
         rule(true,   4, 17, 1, 120, 2),
@@ -250,8 +252,8 @@ var zoned = [
         state(120,  true, 5, 3),
         state( 60,  true, 2, 3),
         state(  0, false, 0, 2)
-    ])}).toString(), "Mon Oct 21 2024 11:17:00 GMT+0100" ],
-[ new Date(1729501860000, {ll:'STDSTDDT',
+    ])}, 2024, 9, 21, 11, 17, 0, 0).toString(), "Mon Oct 21 2024 11:17:00 GMT+0100" ],
+[ Date.zoned({ll:'STDSTDDT',
     d:arr([
         rule(true ,  2, 22, 7, 120, 1),
         rule(true,   4, 17, 1, 120, 2),
@@ -260,15 +262,21 @@ var zoned = [
         state(120,  true, 5, 3),
         state( 60,  true, 2, 3),
         state(  0, false, 0, 2)
-    ])}).toString(), "Mon Oct 21 2024 10:11:00 GMT+0100" ],
-// Global settings are still intact:
-[ new Date("2024-10-21 11:18").toString(), "Mon Oct 21 2024 11:18:00 GMT+0200" ],
-[ new Date(2024, 9, 21, 11, 19, 0, 0).toString(), "Mon Oct 21 2024 11:19:00 GMT+0200" ],
-[ new Date(1729501860000).toString(), "Mon Oct 21 2024 11:11:00 GMT+0200" ],    
+    ])}, 1729501860000).toString(), "Mon Oct 21 2024 10:11:00 GMT+0100" ],
+  [ Date.zoned(13).getTimezone(), 13 ],
+  [ Date.zoned(5.5).getTimezone(), 5.5 ],
+  [ Date.zoned(0).getTimezoneID(), "Etc/GMT" ],
+  [ Date.zoned(13).getTimezoneID(), "Etc/GMT+13" ],
+  [ Date.zoned(5.5).getTimezoneID(), undefined ],
+  [ JSON.stringify(Date.zoned({i: "America/Los_Angeles", l:"PT", ll:"PSTPDT", d:arr([-2119989376,-2054715519,
+         -868220925,-860290877])}).getTimezone()), '{"i":"America/Los_Angeles","l":"PT","ll":"PSTPDT","d":[-2119989376,-2054715519,-868220925,-860290877]}'
+    ],
+  [ new Date("2000-1-1").setTimezone(3), -180 ],
+  [ (d = new Date("2000-1-1"), d.setTimezone(3), d.setTimezone(undefined)), -120 ],
 ];
 tot(zoned);
 
-//Real world data
+// //Real world data
 
 E.setTimeZone({"i":"America\/Los_Angeles","l":"PT","ll":"PSTPDT","d":arr([
     622849920,629622721,632365440,638009281,642203520,646557121,650590080,654943681,

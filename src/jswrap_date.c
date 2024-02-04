@@ -36,7 +36,6 @@ int integerDivideFloor(int a, int b) {
 #define INTEGER_DIVIDE_FLOOR(a,b) integerDivideFloor((a),(b))
 #endif
 
-
 // Convert y,m,d into a number of days since 1970, where 0<=m<=11
 // https://github.com/deirdreobyrne/CalendarAndDST
 static int get_day_number_from_date(int y, int m, int d) {
@@ -181,7 +180,7 @@ JsVarInt get_tz_local_time_descriptor(JsVarFloat ms, JsVar *tz, bool is_local_ti
   JsVarInt start = -1;
   bool have_prev = false;
   unsigned end = 0x7FFFFFFF;
-  JsVarInt min = ms / (60 * 1000) + 36816480;
+  JsVarInt min = ms / (60 * 1000) + 36816480; // Or … should we use 1887 (advent of time zones)?
   JsVarInt bound = is_local_time ? min - 16 * 60 : min; 
   JsvArrayBufferIterator it;
   // The data structure is designed so it could be binary or interpolation searched
@@ -247,7 +246,7 @@ JsVarInt get_tz_local_time_descriptor(JsVarFloat ms, JsVar *tz, bool is_local_ti
   if (next) *next = end < 0x7FFFFFFF ? ((end >> 0x04) - 36816480) * 60. * 1000 : INFINITY;
   jsvArrayBufferIteratorFree(&it);
   jsvUnLock(d);
-  return r;
+  return (r & 0xC0000000) == 0xC0000000 ? r : -1; // In case of malformed table.
 }
 #endif
 
@@ -409,8 +408,41 @@ JsVar *jswrap_date_from_milliseconds(JsVarFloat time) {
 
 static JsVar *zoned_date_from_milliseconds_and_unlock(JsVarFloat time, JsVar *tz) {
   JsVar *r = jswrap_date_from_milliseconds(time);
-  if (tz) jsvObjectSetChildAndUnLock(r, JS_TIMEZONE_VAR, tz);
+  if (tz && r) jsvObjectSetChildAndUnLock(r, JS_TIMEZONE_VAR, tz);
   return r;
+}
+
+// Note: unlocks *tz.
+static JsVar *date_constructor(JsVar *args, JsVarInt offs, JsVar **tz) {
+  JsVarFloat time = 0;
+  if (jsvGetArrayLength(args) == offs) {
+    time = jswrap_date_now();
+  } else if (jsvGetArrayLength(args) == offs + 1) {
+    JsVar *arg = jsvGetArrayItem(args, offs);
+    if (jsvIsNumeric(arg))
+      time = jsvGetFloat(arg);
+    else if (jsvIsString(arg))
+      time = parse_date(arg, tz); // Note a tz of true could be replaced here.
+    else
+      jsExceptionHere(JSET_TYPEERROR, "Variables of type %t are not supported in date constructor", arg);
+    jsvUnLock(arg);
+  } else {
+    CalendarDate date;
+    date.year = (int)jsvGetIntegerAndUnLock(jsvGetArrayItem(args, offs++));
+    date.month = (int)(jsvGetIntegerAndUnLock(jsvGetArrayItem(args, offs++)));
+    date.day = (int)(jsvGetIntegerAndUnLock(jsvGetArrayItem(args, offs++)));
+    TimeInDay td;
+    td.daysSinceEpoch = fromCalendarDate(&date);
+    td.hour = (int)(jsvGetIntegerAndUnLock(jsvGetArrayItem(args, offs++)));
+    td.min = (int)(jsvGetIntegerAndUnLock(jsvGetArrayItem(args, offs++)));
+    td.sec = (int)(jsvGetIntegerAndUnLock(jsvGetArrayItem(args, offs++)));
+    td.ms = (int)(jsvGetIntegerAndUnLock(jsvGetArrayItem(args, offs++)));
+    td.zone = 0;
+    time = from_time_in_day_with_default(&td, *tz);
+  }
+  return *tz
+    ? zoned_date_from_milliseconds_and_unlock(time, *tz)
+    : jswrap_date_from_milliseconds(time);
 }
 
 /*JSON{
@@ -419,55 +451,50 @@ static JsVar *zoned_date_from_milliseconds_and_unlock(JsVarFloat time, JsVar *tz
   "name" : "Date",
   "generate" : "jswrap_date_constructor",
   "params" : [
-    ["args","JsVarArray","Either nothing (current time), one numeric argument (milliseconds since 1970), a date string (see `Date.parse`), or [year, month, day, hour, minute, second, millisecond]; optionally followed by a time zone"]
+    ["args","JsVarArray","Either nothing (current time), one numeric argument (milliseconds since 1970), a date string (see `Date.parse`), or [year, month, day, hour, minute, second, millisecond]"]
   ],
   "return" : ["JsVar","A Date object"],
   "return_object" : "Date",
   "typescript" : [
     "new(): Date;",
-    "new(value: null | number | string, tz?: boolean | number | {i:? string, d: number[], l:? string}): Date;",
+    "new(value: number | string): Date;",
     "new(year: number, month: number, date?: number, hours?: number, minutes?: number, seconds?: number, ms?: number): Date;",
-    "new(year: number, month: number, date?: number, hours?: number, minutes?: number, seconds?: number, ms?: number, tz?: number | {i:? string, d: number[], l:? string}): Date;",
     "(arg?: any): string;"
   ]
 }
-Creates a date object, optionally with a time zone. As a special case, a string argument
-containing may take a Boolean time zone. If `true`, any literal offset from GMT will
-be taken as the time zone of the result.
+Creates a date object.
  */
 JsVar *jswrap_date_constructor(JsVar *args) {
-  JsVarFloat time = 0;
-  JsVar *tz = 0;
-  if (jsvGetArrayLength(args)==0) {
-    time = jswrap_date_now();
-  } else if (jsvGetArrayLength(args)<=2) {
-    JsVar *arg = jsvGetArrayItem(args, 0);
-    tz = jsvGetArrayItem(args, 1);
-    if (jsvIsNullish(arg))
-      time = jswrap_date_now();
-    else if (jsvIsNumeric(arg))
-      time = jsvGetFloat(arg);
-    else if (jsvIsString(arg))
-      time = parse_date(arg, &tz); // Note tz could be replaced here.
-    else
-      jsExceptionHere(JSET_TYPEERROR, "Variables of type %t are not supported in date constructor", arg);
-    jsvUnLock(arg);
-  } else {
-    CalendarDate date;
-    date.year = (int)jsvGetIntegerAndUnLock(jsvGetArrayItem(args, 0));
-    date.month = (int)(jsvGetIntegerAndUnLock(jsvGetArrayItem(args, 1)));
-    date.day = (int)(jsvGetIntegerAndUnLock(jsvGetArrayItem(args, 2)));
-    TimeInDay td;
-    td.daysSinceEpoch = fromCalendarDate(&date);
-    td.hour = (int)(jsvGetIntegerAndUnLock(jsvGetArrayItem(args, 3)));
-    td.min = (int)(jsvGetIntegerAndUnLock(jsvGetArrayItem(args, 4)));
-    td.sec = (int)(jsvGetIntegerAndUnLock(jsvGetArrayItem(args, 5)));
-    td.ms = (int)(jsvGetIntegerAndUnLock(jsvGetArrayItem(args, 6)));
-    td.zone = 0;
-    tz = jsvGetArrayItem(args, 7);
-    time = from_time_in_day_with_default(&td, tz);
-  }
-  return zoned_date_from_milliseconds_and_unlock(time, tz);
+  JsVar *tz = 0; // No inherent zone.
+  return date_constructor(args, 0, &tz);
+}
+
+/*JSON{
+  "type" : "staticmethod",
+  "class" : "Date",
+  "name" : "zoned",
+  "generate" : "jswrap_date_zoned",
+  "params" : [
+    ["args","JsVarArray","A time zone followed by arguments for the Date constructor (q.v.)"]
+  ],
+  "return" : ["JsVar","A Date object with inherent time zone"],
+  "return_object" : "Date",
+  "typescript" : [
+    "new(tz?: boolean | number | {i:? string, d: number[], l:? string}): Date;",
+    "new(tz: boolean | number | {i:? string, d: number[], l:? string}, value: number | string): Date;",
+    "new(tz: number | {i:? string, d: number[], l:? string}, year: number, month: number, date?: number, hours?: number, minutes?: number, seconds?: number, ms?: number): Date;",
+    "(arg?: any): string;"
+  ]
+}
+Creates a date object with an inherent time zone. The first argument (which defaults to false)
+represents the time zone, and any subsequent arguments follow the conventions of `new Date()`. A Boolean
+time zone argument means to capture the global setting from `E.setTimeZone()` or `E.setDST()`, or,
+if true and associated with a string parameter having an explicit GMT offset, one captured from that
+string.
+ */
+JsVar *jswrap_date_zoned(JsVar *args) {
+  JsVar *tz = jsvGetArrayLength(args) ? jsvGetArrayItem(args, 0) : jsvNewFromBool(false);
+  return date_constructor(args, 1, &tz);
 }
 
 /*JSON{
@@ -655,6 +682,21 @@ int jswrap_date_getFullYear(JsVar *parent) {
   return getCalendarDateFromDateVar(parent, false/*system timezone*/).year;
 }
 
+#ifndef ESPR_NO_DAYLIGHT_SAVINGS
+/*JSON{
+  "type" : "method",
+  "class" : "Date",
+  "name" : "getTimezone",
+  "generate" : "jswrap_date_getTimezone",
+  "return" : ["JsVar",""]
+}
+Returns the inherent time zone of a Date, if any. This object may be highly encoded, and
+is most useful for transferring to other objects.
+ */
+JsVar *jswrap_date_getTimezone(JsVar *parent) {
+  return jsvObjectGetChildIfExists(parent, JS_TIMEZONE_VAR);
+}
+#endif
 
 /// -------------------------------------------------------
 
@@ -828,6 +870,22 @@ JsVarFloat jswrap_date_setFullYear(JsVar *parent, int yearValue, JsVar *monthVal
   return jswrap_date_setTime(parent, fromTimeInDay(&td,parent));
 }
 
+#ifndef ESPR_NO_DAYLIGHT_SAVINGS
+/*JSON{
+  "type" : "method",
+  "class" : "Date",
+  "name" : "setTimezone",
+  "generate" : "jswrap_date_setTimezone",
+  "params" : [["timeZone","JsVar","The time zone, either a floating point offset from GMT or an encoded time zone descriptor"]],
+  "return" : ["int","The updated difference, in minutes, between UTC and this time"]
+}
+Sets the inherent time zone of a Date.
+ */
+int jswrap_date_setTimezone(JsVar *parent, JsVar *timeZone) {
+  jsvObjectSetChild(parent, JS_TIMEZONE_VAR, timeZone);
+  return jswrap_date_getTimezoneOffset(parent);
+}
+#endif
 
 /// -------------------------------------------------------
 
@@ -1107,7 +1165,7 @@ JsVarFloat jswrap_date_parse(JsVar *str, JsVar *tz) {
 static JsVarInt get_tz_local_time_descriptor_from_date(JsVar *date, JsVar *tz) {
   if (jsvIsObject(tz)) {
     // We might cache the ltd here.
-    return get_tz_local_time_descriptor(jsvGetFloatAndUnLock(jspGetNamedField(date, "ms", false)), tz, false, 0, 0);
+    return get_tz_local_time_descriptor(jsvObjectGetFloatChild(date, "ms"), tz, false, 0, 0);
   } else {
     return (JsVarInt)(0xc0000000 | ((int)(jsvGetFloat(tz) * 60) & 0x03ff) << 0x11);
   }
@@ -1217,13 +1275,24 @@ if known.
 */
 JsVar *jswrap_date_getTimezoneID(JsVar *date) {
   JsVar *tz = time_zone(date);
-  JsVar *id = jspGetNamedField(tz, "i", false);
+  JsVar *id = 0;
+  if (jsvIsNumeric(tz)) {
+    JsVarFloat o = jsvGetFloat(tz);
+    if (o == 0) {
+      static const char *gmt = "Etc/GMT";
+      id = jsvNewNativeString(gmt, strlen(gmt));
+    } else if (o == (int)o) { // India is SOL, but what to do?
+      id = jsvVarPrintf("Etc/GMT%c%d", o > 0 ? '+' : '-', abs((int)o));
+    }
+  } else {
+    id = jspGetNamedField(tz, "i", false);
+  }
   jsvUnLock(tz);
   return id;
 }
 
 static JsVar *get_transition(JsVar *date, bool next) {
-  JsVarFloat time = jsvGetFloatAndUnLock(jspGetNamedField(date, "ms", false));
+  JsVarFloat time = jsvObjectGetFloatChild(date, "ms");
   time -= !next; // Simplify reverese iteration
   JsVar *tz = time_zone(date);
   get_tz_local_time_descriptor(time, tz, false, next ? 0 : &time, next ? &time : 0);

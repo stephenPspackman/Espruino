@@ -40,6 +40,9 @@ int fromCalendarDate(CalendarDate *date);
 JsVarFloat jswrap_date_now();
 JsVar *jswrap_date_from_milliseconds(JsVarFloat time);
 JsVar *jswrap_date_constructor(JsVar *args);
+#ifndef ESPR_NO_DAYLIGHT_SAVING
+JsVar *jswrap_zoneddate_constructor(JsVar *args);
+#endif
 
 int jswrap_date_getTimezoneOffset(JsVar *parent);
 JsVarFloat jswrap_date_getTime(JsVar *parent);
@@ -71,6 +74,9 @@ JsVar *jswrap_date_toLocalISOString(JsVar *parent);
 JsVarFloat jswrap_date_parse(JsVar *str, JsVar *tz);
 
 #ifndef ESPR_NO_DAYLIGHT_SAVING
+JsVar *jswrap_date_zoned(JsVar *args);
+JsVar *jswrap_date_getTimezone(JsVar *parent);
+int jswrap_date_setTimezone(JsVar *parent, JsVar *timeZone);
 JsVar *jswrap_date_getTimeLabel(JsVar *date);
 JsVar *jswrap_date_getTimezoneLabel(JsVar *date);
 JsVar *jswrap_date_getTimezoneID(JsVar *date);
